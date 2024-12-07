@@ -14,7 +14,7 @@
     "docs:watch": "typedoc --options typedoc.config.ts --watch",
     "docs:generate": "compodoc -p tsconfig.json -s",
     "docs:serve": "compodoc -p tsconfig.json -s -w",
-    "prepare": "husky install",
+    "prepare": "husky",
     "lint": "eslint . --ext .ts"
   },
   "keywords": [],
