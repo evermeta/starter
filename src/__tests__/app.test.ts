@@ -80,4 +80,42 @@ describe('App', () => {
       await request(app.getApp()).get('/non-existent-route').expect(404);
     });
   });
+
+  it('should handle missing metrics service', async () => {
+    const container = new Container();
+    // Bind minimum required dependencies
+    container.bind(ExampleController).toSelf();
+    container.bind<Logger>('Logger').toConstantValue({
+      info: jest.fn(),
+      error: jest.fn(),
+    } as unknown as Logger);
+    container.bind<Client>('DatabaseClient').toConstantValue({
+      query: jest.fn(),
+      connect: jest.fn(),
+      end: jest.fn(),
+    } as unknown as Client);
+
+    const app = new App(container);
+    await app.initialize();
+    await app.close();
+  });
+
+  it('should handle missing health check', async () => {
+    const container = new Container();
+    // Bind minimum required dependencies
+    container.bind(ExampleController).toSelf();
+    container.bind<Logger>('Logger').toConstantValue({
+      info: jest.fn(),
+      error: jest.fn(),
+    } as unknown as Logger);
+    container.bind<Client>('DatabaseClient').toConstantValue({
+      query: jest.fn(),
+      connect: jest.fn(),
+      end: jest.fn(),
+    } as unknown as Client);
+
+    const app = new App(container);
+    await app.initialize();
+    await app.close();
+  });
 });

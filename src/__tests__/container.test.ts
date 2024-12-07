@@ -59,6 +59,8 @@ describe('Container', () => {
     it('should handle missing environment variables', () => {
       delete process.env.DB_HOST;
       delete process.env.DB_PORT;
+      delete process.env.NODE_ENV;
+      delete process.env.PORT;
 
       expect(() => configureContainer()).toThrow();
     });

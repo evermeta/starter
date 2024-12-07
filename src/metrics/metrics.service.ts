@@ -10,6 +10,7 @@ export class MetricsService implements IMetricsService {
   private httpRequestDuration: Histogram;
   private activeConnections: Gauge;
   private metricsServer?: Server;
+  private metricsInitialized: boolean = false;
 
   constructor() {
     this.registry = new Registry();
@@ -19,7 +20,6 @@ export class MetricsService implements IMetricsService {
       name: 'http_requests_total',
       help: 'Total number of HTTP requests',
       labelNames: ['method', 'path', 'status'],
-      registers: [this.registry],
     });
 
     // Histogram for request duration
@@ -28,36 +28,41 @@ export class MetricsService implements IMetricsService {
       help: 'HTTP request duration in seconds',
       labelNames: ['method', 'path', 'status'],
       buckets: [0.1, 0.5, 1, 2, 5],
-      registers: [this.registry],
     });
 
     // Gauge for active connections
     this.activeConnections = new Gauge({
       name: 'http_active_connections',
       help: 'Number of active HTTP connections',
-      registers: [this.registry],
     });
   }
 
   async initialize(): Promise<void> {
-    // Create metrics endpoint
-    const app = express();
-    const metricsPort = process.env.METRICS_PORT ? parseInt(process.env.METRICS_PORT) : 9090;
+    if (!this.metricsInitialized) {
+      // Register all metrics
+      this.registry.registerMetric(this.httpRequestsTotal);
+      this.registry.registerMetric(this.httpRequestDuration);
+      this.registry.registerMetric(this.activeConnections);
 
-    app.get('/metrics', async (req, res) => {
-      res.set('Content-Type', this.registry.contentType);
-      res.end(await this.registry.metrics());
-    });
+      // Create metrics endpoint
+      const app = express();
+      const metricsPort = process.env.METRICS_PORT ? parseInt(process.env.METRICS_PORT) : 9090;
 
-    // Start metrics server
-    this.metricsServer = app.listen(metricsPort, () => {
-      console.log(`Metrics server running on port ${metricsPort}`);
-    });
+      app.get('/metrics', async (req, res) => {
+        res.set('Content-Type', this.registry.contentType);
+        res.end(await this.registry.metrics());
+      });
+
+      // Start metrics server
+      this.metricsServer = app.listen(metricsPort);
+      this.metricsInitialized = true;
+    }
   }
 
   recordHttpRequest(method: string, path: string, status: number, duration: number): void {
-    this.httpRequestsTotal.inc({ method, path, status });
-    this.httpRequestDuration.observe({ method, path, status }, duration);
+    const labels = { method, path, status };
+    this.httpRequestsTotal.labels(labels).inc();
+    this.httpRequestDuration.labels(labels).observe(duration);
   }
 
   incrementActiveConnections(): void {
@@ -71,17 +76,17 @@ export class MetricsService implements IMetricsService {
   async shutdown(): Promise<void> {
     if (this.metricsServer) {
       await new Promise<void>(resolve => {
-        this.metricsServer!.close(() => {
-          resolve();
-        });
+        this.metricsServer!.close(() => resolve());
       });
       this.metricsServer = undefined;
     }
+    this.registry.clear();
+    this.metricsInitialized = false;
   }
 }
 
-// Keep only one interface definition and export
 export interface IMetricsService {
+  initialize(): Promise<void>;
   incrementActiveConnections(): void;
   decrementActiveConnections(): void;
   recordHttpRequest(method: string, path: string, statusCode: number, duration: number): void;
