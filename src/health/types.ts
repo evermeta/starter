@@ -15,10 +15,6 @@ export interface HealthCheckResult {
 
 export interface HealthChecker {
   name: string;
-  check(): Promise<{
-    status: HealthStatus;
-    message?: string;
-    error?: string;
-    latency?: number;
-  }>;
+  check: () => Promise<any>;
+  abortController?: AbortController;
 }

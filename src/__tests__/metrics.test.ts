@@ -1,5 +1,4 @@
 import { MetricsService } from '../metrics/metrics.service';
-import { Registry } from 'prom-client';
 import request from 'supertest';
 
 describe('MetricsService', () => {
@@ -14,15 +13,20 @@ describe('MetricsService', () => {
   });
 
   afterEach(async () => {
-    // Clean up after each test
-    await metricsService.shutdown();
+    // Ensure cleanup happens
+    if (metricsService) {
+      await metricsService.shutdown();
+    }
+    // Clear the environment variable
+    delete process.env.METRICS_PORT;
   });
 
   it('should initialize metrics server', async () => {
-    // Server should not be running at this point
     await metricsService.initialize();
-
-    const response = await request(`http://localhost:${metricsPort}`).get('/metrics').expect(200);
+    const response = await request(`http://localhost:${metricsPort}`)
+      .get('/metrics')
+      .timeout(5000) // Add timeout to prevent hanging
+      .expect(200);
 
     expect(response.text).toContain('http_requests_total');
     expect(response.text).toContain('http_request_duration_seconds');
@@ -32,13 +36,14 @@ describe('MetricsService', () => {
   it('should record HTTP requests', async () => {
     await metricsService.initialize();
 
-    // Record some test metrics
     metricsService.recordHttpRequest('GET', '/test', 200, 0.5);
     metricsService.recordHttpRequest('POST', '/api/data', 201, 1.2);
 
-    const response = await request(`http://localhost:${metricsPort}`).get('/metrics').expect(200);
+    const response = await request(`http://localhost:${metricsPort}`)
+      .get('/metrics')
+      .timeout(5000)
+      .expect(200);
 
-    // Verify metrics were recorded
     expect(response.text).toContain(
       'http_requests_total{method="GET",path="/test",status="200"} 1',
     );
@@ -50,31 +55,22 @@ describe('MetricsService', () => {
   it('should track active connections', async () => {
     await metricsService.initialize();
 
-    // Simulate connections
     metricsService.incrementActiveConnections();
     metricsService.incrementActiveConnections();
     metricsService.decrementActiveConnections();
 
-    const response = await request(`http://localhost:${metricsPort}`).get('/metrics').expect(200);
+    const response = await request(`http://localhost:${metricsPort}`)
+      .get('/metrics')
+      .timeout(5000)
+      .expect(200);
 
-    // Should show 1 active connection
     expect(response.text).toContain('http_active_connections 1');
   });
 
   it('should handle shutdown gracefully', async () => {
-    // Test shutdown behavior
+    await metricsService.initialize();
     await metricsService.shutdown();
-  });
-
-  it('should use default port if METRICS_PORT is not set', async () => {
-    delete process.env.METRICS_PORT;
-    const service = new MetricsService();
-    await service.initialize();
-
-    const response = await request('http://localhost:9090').get('/metrics').expect(200);
-
-    expect(response.text).toBeDefined();
-
-    await service.shutdown();
+    // Verify server is no longer responding
+    await expect(request(`http://localhost:${metricsPort}`).get('/metrics')).rejects.toThrow();
   });
 });

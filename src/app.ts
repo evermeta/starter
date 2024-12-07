@@ -1,16 +1,15 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import { injectable } from 'inversify';
-import * as swaggerUi from 'swagger-ui-express';
 import { Container } from 'inversify';
 import { ExampleController } from './controllers/example.controller';
-import { swaggerSpec } from './swagger';
-import { initializeTracing } from './tracing';
+import * as opentelemetry from '@opentelemetry/api';
 import { MetricsService } from './metrics/metrics.service';
 import { HealthCheck } from './health/health.check';
 
 @injectable()
 export class App {
   private app: Express;
+  private server: any;
 
   constructor(private readonly container: Container) {
     this.app = express();
@@ -18,7 +17,6 @@ export class App {
   }
 
   private setupMiddleware(): void {
-    const opentelemetry = require('@opentelemetry/api');
     this.app.use((req, res, next) => {
       // Get the active tracer from the global tracer provider
       const tracer = opentelemetry.trace.getTracer('express');
@@ -39,12 +37,16 @@ export class App {
       return opentelemetry.context.with(ctx, () => {
         // Track response
         const originalEnd = res.end;
-        res.end = function (chunk: any, encoding?: any, cb?: () => void) {
+        res.end = function (
+          chunk: unknown,
+          encoding?: BufferEncoding | (() => void),
+          cb?: () => void,
+        ) {
           span.setAttributes({
             'http.status_code': res.statusCode,
           });
           span.end();
-          return originalEnd.apply(res, [chunk, encoding, cb]);
+          return originalEnd.apply(res, [chunk, encoding as BufferEncoding, cb]);
         };
 
         next();
@@ -61,50 +63,60 @@ export class App {
     this.setupRoutes();
 
     // Error handling should be last
-    this.app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+    this.app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
       res.status(500).json({
         status: 'error',
         message: err.message,
       });
     });
   }
-
   private setupMetricsMiddleware(): void {
-    const metricsService = this.container.get<MetricsService>(MetricsService);
+    try {
+      const metricsService = this.container.isBound('MetricsService')
+        ? this.container.get<MetricsService>('MetricsService')
+        : null;
 
-    // Add null check to prevent errors if metrics service isn't available
-    if (!metricsService) {
-      return;
-    }
-
-    this.app.use((req, res, next) => {
-      const start = process.hrtime();
-
-      // Verify method exists before calling
-      if (typeof metricsService.incrementActiveConnections === 'function') {
-        metricsService.incrementActiveConnections();
+      if (!metricsService) {
+        return;
       }
 
-      res.on('finish', () => {
-        const duration = process.hrtime(start);
-        const durationInSeconds = duration[0] + duration[1] / 1e9;
+      this.app.use((req, res, next) => {
+        const start = process.hrtime();
 
-        if (typeof metricsService.recordHttpRequest === 'function') {
-          metricsService.recordHttpRequest(req.method, req.path, res.statusCode, durationInSeconds);
+        // Verify method exists before calling
+        if (typeof metricsService.incrementActiveConnections === 'function') {
+          metricsService.incrementActiveConnections();
         }
-        if (typeof metricsService.decrementActiveConnections === 'function') {
-          metricsService.decrementActiveConnections();
-        }
+
+        res.on('finish', () => {
+          const duration = process.hrtime(start);
+          const durationInSeconds = duration[0] + duration[1] / 1e9;
+          if (typeof metricsService.recordHttpRequest === 'function') {
+            metricsService.recordHttpRequest(
+              req.method,
+              req.path,
+              res.statusCode,
+              durationInSeconds,
+            );
+          }
+          if (typeof metricsService.decrementActiveConnections === 'function') {
+            metricsService.decrementActiveConnections();
+          }
+        });
+
+        next();
       });
-
-      next();
-    });
+    } catch (error) {
+      // Safely handle the case where metrics service isn't available
+      console.warn('Metrics service not available:', error);
+      return;
+    }
   }
 
   private setupRoutes(): void {
     // Health check routes
     this.app.get('/health', async (req: Request, res: Response) => {
-      const healthCheck = this.container.get<HealthCheck>(HealthCheck);
+      const healthCheck = this.container.get<HealthCheck>('HealthCheck');
       const health = await healthCheck.getHealth();
 
       const statusCode = health.status === 'up' ? 200 : health.status === 'degraded' ? 200 : 503;
@@ -114,7 +126,7 @@ export class App {
 
     // Detailed health check route for internal/admin use
     this.app.get('/health/details', async (req: Request, res: Response) => {
-      const healthCheck = this.container.get<HealthCheck>(HealthCheck);
+      const healthCheck = this.container.get<HealthCheck>('HealthCheck');
       const health = await healthCheck.getHealth();
 
       const statusCode = health.status === 'up' ? 200 : health.status === 'degraded' ? 200 : 503;
@@ -139,10 +151,18 @@ export class App {
   }
 
   async initialize(): Promise<void> {
-    // Add your initialization logic here
+    this.server = this.app.listen(/* your port */);
   }
 
   async close(): Promise<void> {
-    // Add your cleanup logic here
+    if (this.server) {
+      await new Promise(resolve => {
+        this.server.close(resolve);
+      });
+    }
+    if (this.container.isBound('MetricsService')) {
+      const metricsService = this.container.get<MetricsService>('MetricsService');
+      await metricsService.shutdown?.();
+    }
   }
 }

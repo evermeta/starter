@@ -12,8 +12,9 @@ describe('App', () => {
   let container: Container;
   let mockDbClient: jest.Mocked<Client>;
   let mockLogger: jest.Mocked<Logger>;
+  let metricsService: MetricsService;
 
-  beforeEach(() => {
+  beforeAll(async () => {
     // Mock process.memoryUsage
     jest.spyOn(process, 'memoryUsage').mockReturnValue({
       heapUsed: 100,
@@ -40,15 +41,25 @@ describe('App', () => {
     container.bind<Client>('DatabaseClient').toConstantValue(mockDbClient);
     container.bind<Logger>('Logger').toConstantValue(mockLogger);
     container.bind(ExampleController).toSelf();
-    container.bind(MetricsService).toSelf();
-    container.bind(HealthCheck).toSelf();
+    container.bind<MetricsService>('MetricsService').to(MetricsService);
+    container.bind<HealthCheck>('HealthCheck').to(HealthCheck);
+
+    // Get reference to metrics service
+    metricsService = container.get<MetricsService>('MetricsService');
 
     // Create new application instance
     app = new App(container);
+    await app.initialize();
   });
 
-  afterEach(() => {
-    container.unbindAll();
+  afterAll(async () => {
+    // Enhanced cleanup
+    try {
+      await app.close();
+      await new Promise(resolve => setTimeout(resolve, 100)); // Small delay to ensure cleanup
+    } catch (error) {
+      console.error('Cleanup error:', error);
+    }
   });
 
   describe('GET /health', () => {

@@ -3,6 +3,7 @@ import { MetricsService } from './metrics/metrics.service';
 import { Client } from 'pg';
 import { Logger } from 'winston';
 import { createLogger, format, transports } from 'winston';
+import { HealthCheck } from './services/health';
 
 // Create container instance
 const container = new Container();
@@ -27,5 +28,6 @@ container.bind<Client>('DatabaseClient').toConstantValue(dbClient);
 
 // Bind services
 container.bind(MetricsService).toSelf();
+container.bind<HealthCheck>('HealthCheck').to(HealthCheck);
 
 export { container };

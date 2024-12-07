@@ -68,11 +68,19 @@ export class HealthCheck {
     this.interval = setInterval(() => this.check(), interval);
     await this.check(); // Initial check
   }
-
   async stop(): Promise<void> {
     if (this.interval) {
       clearInterval(this.interval);
+      this.interval = undefined;
     }
+    // Add cleanup of any pending health checks
+    for (const checker of this.healthCheckers) {
+      if (checker.abortController) {
+        checker.abortController.abort();
+      }
+    }
+    this.lastResult = undefined;
+    return Promise.resolve();
   }
 
   private async check(): Promise<HealthCheckResult> {
@@ -80,8 +88,20 @@ export class HealthCheck {
     let overallStatus: HealthStatus = 'up';
 
     for (const checker of this.healthCheckers) {
+      const abortController = new AbortController();
+      checker.abortController = abortController;
+      const timeoutId = setTimeout(() => abortController.abort(), 5000);
+
       try {
-        const result = await checker.check();
+        const result = await Promise.race([
+          checker.check(),
+          new Promise<never>((_, reject) => {
+            abortController.signal.addEventListener('abort', () =>
+              reject(new Error('Health check timeout')),
+            );
+          }),
+        ]);
+
         details[checker.name] = result;
 
         if (result.status === 'down') {
@@ -95,6 +115,9 @@ export class HealthCheck {
           error: error instanceof Error ? error.message : 'Unknown error',
         };
         overallStatus = 'down';
+      } finally {
+        clearTimeout(timeoutId);
+        delete checker.abortController;
       }
     }
 

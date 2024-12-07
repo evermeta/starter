@@ -9,9 +9,10 @@ const instrumentations = [new HttpInstrumentation()];
 export function initializeTracing() {
   const sdk = new NodeSDK({
     resource: new Resource({
-      [SemanticResourceAttributes.SERVICE_NAME]: 'your-service-name',
+      [SemanticResourceAttributes.SERVICE_NAME]: 'starter',
     }),
     spanProcessor: new SimpleSpanProcessor(new ConsoleSpanExporter()),
+    instrumentations: instrumentations,
   });
 
   sdk.start();

@@ -4,7 +4,7 @@ import express from 'express';
 import { Server } from 'http';
 
 @injectable()
-export class MetricsService {
+export class MetricsService implements IMetricsService {
   private registry: Registry;
   private httpRequestsTotal: Counter;
   private httpRequestDuration: Histogram;
@@ -78,4 +78,12 @@ export class MetricsService {
       this.metricsServer = undefined;
     }
   }
+}
+
+// Keep only one interface definition and export
+export interface IMetricsService {
+  incrementActiveConnections(): void;
+  decrementActiveConnections(): void;
+  recordHttpRequest(method: string, path: string, statusCode: number, duration: number): void;
+  shutdown(): Promise<void>;
 }
