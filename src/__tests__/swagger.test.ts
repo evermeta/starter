@@ -1,23 +1,23 @@
-import { configureSwagger } from '../swagger';
-import { Application } from 'express';
+import { setupSwagger } from '../config/swagger.config';
+import { Express } from 'express';
 import * as swaggerUi from 'swagger-ui-express';
 
 jest.mock('swagger-ui-express');
+jest.mock('openapi-jsdoc', () => () => ({}));
 
 describe('Swagger Setup', () => {
-  let app: Application;
+  let app: Express;
 
   beforeEach(() => {
     app = {
       use: jest.fn(),
-    } as unknown as Application;
+    } as unknown as Express;
   });
 
   it('should setup swagger documentation', () => {
-    configureSwagger(app);
+    setupSwagger(app);
 
-    expect(app.use).toHaveBeenCalledWith('/api-docs', expect.any(Array));
-
+    expect(app.use).toHaveBeenCalledWith('/api-docs', swaggerUi.serve, swaggerUi.setup({}));
     expect(app.use).toHaveBeenCalledWith('/api-docs/swagger.json', expect.any(Function));
   });
 });
