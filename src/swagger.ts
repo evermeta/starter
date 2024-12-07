@@ -1,4 +1,6 @@
 import swaggerJsdoc from 'swagger-jsdoc';
+import { Application } from 'express';
+import swaggerUi from 'swagger-ui-express';
 
 const options = {
   definition: {
@@ -13,3 +15,13 @@ const options = {
 };
 
 export const swaggerSpec = swaggerJsdoc(options);
+
+export function configureSwagger(app: Application) {
+  // Combine swagger middleware into a single array
+  app.use('/api-docs', [...swaggerUi.serve, swaggerUi.setup(swaggerSpec)]);
+
+  // Serve swagger JSON
+  app.use('/api-docs/swagger.json', (req, res) => {
+    res.json(swaggerSpec);
+  });
+}

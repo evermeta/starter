@@ -133,7 +133,7 @@ export class App {
 
       res.status(statusCode).json({
         ...health,
-        timestamp: health.timestamp.toISOString(),
+        timestamp: health.timestamp?.toISOString(),
         uptime: process.uptime(),
         processMemory: process.memoryUsage(),
         nodeVersion: process.version,

@@ -73,4 +73,65 @@ describe('MetricsService', () => {
     // Verify server is no longer responding
     await expect(request(`http://localhost:${metricsPort}`).get('/metrics')).rejects.toThrow();
   });
+
+  it('should handle concurrent metric updates', async () => {
+    await metricsService.initialize();
+
+    // Simulate concurrent requests
+    await Promise.all([
+      metricsService.recordHttpRequest('GET', '/test', 200, 0.1),
+      metricsService.recordHttpRequest('GET', '/test', 200, 0.2),
+      metricsService.recordHttpRequest('GET', '/test', 200, 0.3),
+    ]);
+
+    const response = await request(`http://localhost:${metricsPort}`)
+      .get('/metrics')
+      .timeout(5000)
+      .expect(200);
+
+    expect(response.text).toMatch(/http_requests_total{.*}.*3/);
+  });
+
+  it('should handle error responses correctly', async () => {
+    await metricsService.initialize();
+
+    // Record various error scenarios
+    metricsService.recordHttpRequest('GET', '/api/error', 500, 0.1);
+    metricsService.recordHttpRequest('POST', '/api/error', 400, 0.2);
+    metricsService.recordHttpRequest('PUT', '/api/error', 403, 0.3);
+
+    const response = await request(`http://localhost:${metricsPort}`)
+      .get('/metrics')
+      .timeout(5000)
+      .expect(200);
+
+    // Check for error metrics
+    expect(response.text).toContain(
+      'http_requests_total{method="GET",path="/api/error",status="500"} 1',
+    );
+    expect(response.text).toContain(
+      'http_requests_total{method="POST",path="/api/error",status="400"} 1',
+    );
+    expect(response.text).toContain(
+      'http_requests_total{method="PUT",path="/api/error",status="403"} 1',
+    );
+  });
+
+  it('should handle concurrent operations safely', async () => {
+    await metricsService.initialize();
+
+    // Simulate concurrent requests
+    await Promise.all([
+      metricsService.incrementActiveConnections(),
+      metricsService.incrementActiveConnections(),
+      metricsService.decrementActiveConnections(),
+    ]);
+
+    const response = await request(`http://localhost:${metricsPort}`)
+      .get('/metrics')
+      .timeout(5000)
+      .expect(200);
+
+    expect(response.text).toContain('http_active_connections 1');
+  });
 });

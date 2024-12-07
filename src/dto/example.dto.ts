@@ -17,31 +17,41 @@
  *         - name
  *         - description
  */
-export class CreateExampleDto {
-  name!: string;
-  description!: string;
+import { IsNotEmpty, IsString, IsEnum } from 'class-validator';
+
+export enum ExampleStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
 }
 
-/**
- * @swagger
- * components:
- *   schemas:
- *     ExampleResponseDto:
- *       type: object
- *       properties:
- *         id:
- *           type: number
- *         name:
- *           type: string
- *         description:
- *           type: string
- *         createdAt:
- *           type: string
- *           format: date-time
- */
-export class ExampleResponseDto {
-  id!: number;
+export class CreateExampleDto {
+  @IsNotEmpty()
+  @IsString()
   name!: string;
+
+  @IsNotEmpty()
+  @IsString()
   description!: string;
-  createdAt!: Date;
+
+  @IsEnum(ExampleStatus)
+  status!: ExampleStatus;
 }
+
+export class UpdateExampleDto {
+  @IsString()
+  @IsNotEmpty({
+    message: 'name should not be empty when provided',
+  })
+  name?: string;
+
+  @IsString()
+  @IsNotEmpty({
+    message: 'description should not be empty when provided',
+  })
+  description?: string;
+
+  @IsEnum(ExampleStatus)
+  status?: ExampleStatus;
+}
+/**
+ */

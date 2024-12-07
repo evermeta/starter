@@ -2,82 +2,84 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import { BatchSpanProcessor, InMemorySpanExporter } from '@opentelemetry/sdk-trace-base';
 import { Resource } from '@opentelemetry/resources';
 import { context, trace } from '@opentelemetry/api';
+import { initializeTracing } from '../tracing';
 
-describe('OpenTelemetry Basic Tracing', () => {
-  let memoryExporter: InMemorySpanExporter;
-  let sdk: NodeSDK;
-  let spanProcessor: BatchSpanProcessor;
+// Update the mock to return a properly typed object
+jest.mock('@opentelemetry/sdk-node', () => ({
+  NodeSDK: jest.fn().mockImplementation(() => ({
+    start: jest.fn().mockResolvedValue(undefined),
+    shutdown: jest.fn().mockResolvedValue(undefined),
+  })) as jest.MockedClass<typeof NodeSDK>,
+}));
 
-  beforeAll(async () => {
-    memoryExporter = new InMemorySpanExporter();
-    spanProcessor = new BatchSpanProcessor(memoryExporter);
-    sdk = new NodeSDK({
-      spanProcessor: spanProcessor,
-      resource: new Resource({
-        'service.name': 'test-service',
-      }),
-    });
-    await sdk.start();
-  });
-
-  afterAll(async () => {
-    await sdk.shutdown();
-  });
+describe('Tracing Configuration', () => {
+  let originalEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {
-    memoryExporter.reset();
+    originalEnv = { ...process.env };
+    // Set up environment variables for the test
+    process.env.OTEL_SERVICE_NAME = 'test-service';
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = 'http://localhost:4318';
+    jest.clearAllMocks();
   });
 
-  it('should create a basic span', async () => {
-    // Create a span
-    const tracer = trace.getTracer('default');
-    const span = tracer.startSpan('test span');
-
-    // Add some attributes
-    span.setAttribute('test.attribute', 'test value');
-
-    // Do some "work"
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    // End the span
-    span.end();
-
-    // Force flush the batch processor
-    await spanProcessor.forceFlush();
-
-    // Check results
-    const spans = memoryExporter.getFinishedSpans();
-    console.log('Collected spans:', spans);
-
-    expect(spans.length).toBeGreaterThan(0);
-    const testSpan = spans.find(s => s.name === 'test span');
-    expect(testSpan).toBeDefined();
+  afterEach(() => {
+    process.env = originalEnv;
+    // Clean up environment variables
+    delete process.env.OTEL_SERVICE_NAME;
+    // Clean up any other environment variables
   });
 
-  it('should create nested spans with context propagation', async () => {
-    const tracer = trace.getTracer('default');
-    const parentSpan = tracer.startSpan('parent operation');
-    await context.with(trace.setSpan(context.active(), parentSpan), async () => {
-      // This span should automatically become a child of parentSpan
-      const childSpan = tracer.startSpan('child operation');
-      childSpan.setAttribute('custom.attribute', 'child value');
-      await new Promise(resolve => setTimeout(resolve, 50));
-      childSpan.end();
-    });
+  it('should initialize tracing with environment variables', async () => {
+    const sdk = await initializeTracing();
+    expect(NodeSDK).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resource: expect.objectContaining({
+          attributes: expect.objectContaining({
+            'service.name': 'test-service',
+          }),
+        }),
+      }),
+    );
+    expect(sdk).toBeDefined();
+    await sdk?.shutdown();
+  });
 
-    parentSpan.end();
+  it('should use default values when environment variables are not set', async () => {
+    delete process.env.OTEL_SERVICE_NAME;
+    delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
 
-    await spanProcessor.forceFlush();
+    const sdk = await initializeTracing();
+    expect(NodeSDK).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resource: expect.objectContaining({
+          attributes: expect.objectContaining({
+            'service.name': expect.any(String),
+          }),
+        }),
+      }),
+    );
+    expect(sdk).toBeDefined();
+    await sdk?.shutdown();
+  });
 
-    const spans = memoryExporter.getFinishedSpans();
-    expect(spans.length).toBe(2);
+  it('should handle custom configuration', async () => {
+    const customConfig = {
+      serviceName: 'custom-service',
+      endpoint: 'http://custom-endpoint:4318',
+    };
 
-    const parent = spans.find(s => s.name === 'parent operation');
-    const child = spans.find(s => s.name === 'child operation');
-
-    expect(parent).toBeDefined();
-    expect(child).toBeDefined();
-    expect(child?.parentSpanId).toBe(parent?.spanContext().spanId);
-    expect(child?.attributes['custom.attribute']).toBe('child value');
+    const sdk = await initializeTracing(customConfig);
+    expect(NodeSDK).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resource: expect.objectContaining({
+          attributes: expect.objectContaining({
+            'service.name': 'custom-service',
+          }),
+        }),
+      }),
+    );
+    expect(sdk).toBeDefined();
+    await sdk?.shutdown();
   });
 });

@@ -27,22 +27,31 @@ describe('Winston Logging', () => {
     }
   });
 
-  it('should write structured logs to file', async () => {
+  it('should write structured logs to file', () => {
     const testMessage = 'test log message';
 
-    // Write a test log
-    logger.info(testMessage);
+    // Write a test log and verify it
+    return new Promise<void>(resolve => {
+      logger.info(testMessage);
+      setTimeout(resolve, 100);
+    }).then(() => {
+      // Read and parse the log file
+      const logContent = fs.readFileSync(logFile, 'utf8');
+      let logEntry;
 
-    // Wait a bit for the file to be written
-    await new Promise(resolve => setTimeout(resolve, 100));
+      try {
+        // Handle case where multiple logs might be written
+        const logs = logContent.trim().split('\n');
+        logEntry = JSON.parse(logs[0]); // Parse the first log entry
+      } catch (error) {
+        console.error('Failed to parse log content:', logContent);
+        throw error;
+      }
 
-    // Read and parse the log file
-    const logContent = fs.readFileSync(logFile, 'utf8');
-    const logEntry = JSON.parse(logContent);
-
-    // Verify log structure
-    expect(logEntry).toHaveProperty('level', 'info');
-    expect(logEntry).toHaveProperty('message', testMessage);
-    expect(logEntry).toHaveProperty('timestamp');
+      // Verify log structure
+      expect(logEntry).toHaveProperty('level', 'info');
+      expect(logEntry).toHaveProperty('message', testMessage);
+      expect(logEntry).toHaveProperty('timestamp');
+    });
   });
 });

@@ -8,9 +8,12 @@ export class ConfigService {
     this.config = initialConfig;
   }
 
-  get<T>(key: string): T {
+  get<T>(key: string, defaultValue?: T): T {
     if (!(key in this.config)) {
-      throw new Error(`Configuration key "${key}" not found`);
+      if (defaultValue !== undefined) {
+        return defaultValue;
+      }
+      return undefined as T;
     }
     return this.config[key] as T;
   }

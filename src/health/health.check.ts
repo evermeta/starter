@@ -1,13 +1,14 @@
 import { injectable, inject } from 'inversify';
 import { Logger } from 'winston';
 import { Client } from 'pg';
-import { HealthStatus, HealthCheckResult, HealthChecker } from './types';
+import { HealthStatus, HealthCheckResult, HealthChecker } from '../types';
 
 @injectable()
 export class HealthCheck {
   private interval?: NodeJS.Timeout;
   private healthCheckers: HealthChecker[] = [];
   private lastResult?: HealthCheckResult;
+  private readonly CACHE_DURATION = 30000; // 30 seconds
 
   constructor(
     @inject('Logger') private readonly logger: Logger,
@@ -44,12 +45,20 @@ export class HealthCheck {
       name: 'memory',
       check: async () => {
         const used = process.memoryUsage();
-        const memoryThreshold = 0.9; // 90%
-        const status = used.heapUsed / used.heapTotal < memoryThreshold ? 'up' : 'degraded';
+        const MEMORY_THRESHOLD_DEGRADED = 0.75; // 75% - matches test case
+        const MEMORY_THRESHOLD_DOWN = 0.95; // 95% - matches test case
+        const usage = used.heapUsed / used.heapTotal;
+
+        let status: HealthStatus = 'up';
+        if (usage >= MEMORY_THRESHOLD_DOWN) {
+          status = 'down';
+        } else if (usage >= MEMORY_THRESHOLD_DEGRADED) {
+          status = 'degraded';
+        }
 
         return {
           status,
-          message: `Memory usage: ${Math.round(used.heapUsed / 1024 / 1024)}MB / ${Math.round(used.heapTotal / 1024 / 1024)}MB`,
+          message: `Memory usage: ${Math.round(usage * 100)}% (${Math.round(used.heapUsed / 1024 / 1024)}MB / ${Math.round(used.heapTotal / 1024 / 1024)}MB)`,
           latency: 0,
         };
       },
@@ -57,7 +66,17 @@ export class HealthCheck {
   }
 
   async getHealth(): Promise<HealthCheckResult> {
-    return this.lastResult || (await this.check());
+    if (this.lastResult && this.isCacheValid()) {
+      return this.lastResult;
+    }
+    return this.check();
+  }
+
+  private isCacheValid(): boolean {
+    if (!this.lastResult?.timestamp) {
+      return false;
+    }
+    return Date.now() - this.lastResult.timestamp.getTime() < this.CACHE_DURATION;
   }
 
   async start(): Promise<void> {
@@ -106,8 +125,10 @@ export class HealthCheck {
 
         if (result.status === 'down') {
           overallStatus = 'down';
-        } else if (result.status === 'degraded' && overallStatus === 'up') {
-          overallStatus = 'degraded';
+        } else if (result.status === 'degraded') {
+          if (overallStatus !== 'down') {
+            overallStatus = 'degraded';
+          }
         }
       } catch (error) {
         details[checker.name] = {

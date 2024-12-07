@@ -4,16 +4,23 @@ import { ConsoleSpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-tra
 import { Resource } from '@opentelemetry/resources';
 import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
 
+interface TracingConfig {
+  serviceName?: string;
+  endpoint?: string;
+}
+
 const instrumentations = [new HttpInstrumentation()];
 
-export function initializeTracing() {
+export async function initializeTracing(config?: TracingConfig): Promise<NodeSDK | undefined> {
   const sdk = new NodeSDK({
     resource: new Resource({
-      [SemanticResourceAttributes.SERVICE_NAME]: 'starter',
+      [SemanticResourceAttributes.SERVICE_NAME]:
+        config?.serviceName || process.env.OTEL_SERVICE_NAME || 'starter',
     }),
     spanProcessor: new SimpleSpanProcessor(new ConsoleSpanExporter()),
     instrumentations: instrumentations,
   });
 
   sdk.start();
+  return sdk;
 }
