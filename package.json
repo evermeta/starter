@@ -58,6 +58,11 @@
     "ts-jest": "^29.2.5",
     "tsconfig-paths": "^4.2.0",
     "typedoc": "^0.27.3",
-    "typedoc-plugin-markdown": "^3.17.1"
+    "typedoc-plugin-markdown": "^3.17.1",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0"
   }
 }
