@@ -15,7 +15,9 @@
     "docs:generate": "compodoc -p tsconfig.json -s",
     "docs:serve": "compodoc -p tsconfig.json -s -w",
     "prepare": "husky",
-    "lint": "eslint . --ext .ts"
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "keywords": [],
   "author": "",

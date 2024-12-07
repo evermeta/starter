@@ -1,24 +1,24 @@
 export type HealthStatus = 'up' | 'down' | 'degraded';
 
 export interface HealthCheckResult {
-    status: HealthStatus;
-    timestamp: Date;
-    details: {
-        [key: string]: {
-            status: HealthStatus;
-            message?: string;
-            error?: string;
-            latency?: number;
-        };
+  status: HealthStatus;
+  timestamp: Date;
+  details: {
+    [key: string]: {
+      status: HealthStatus;
+      message?: string;
+      error?: string;
+      latency?: number;
     };
+  };
 }
 
 export interface HealthChecker {
-    name: string;
-    check(): Promise<{
-        status: HealthStatus;
-        message?: string;
-        error?: string;
-        latency?: number;
-    }>;
-} 
+  name: string;
+  check(): Promise<{
+    status: HealthStatus;
+    message?: string;
+    error?: string;
+    latency?: number;
+  }>;
+}

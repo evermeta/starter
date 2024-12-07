@@ -18,8 +18,8 @@
  *         - description
  */
 export class CreateExampleDto {
-    name!: string;
-    description!: string;
+  name!: string;
+  description!: string;
 }
 
 /**
@@ -40,8 +40,8 @@ export class CreateExampleDto {
  *           format: date-time
  */
 export class ExampleResponseDto {
-    id!: number;
-    name!: string;
-    description!: string;
-    createdAt!: Date;
+  id!: number;
+  name!: string;
+  description!: string;
+  createdAt!: Date;
 }
