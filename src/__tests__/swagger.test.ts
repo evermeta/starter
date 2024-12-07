@@ -3,7 +3,7 @@ import { Express } from 'express';
 import * as swaggerUi from 'swagger-ui-express';
 
 jest.mock('swagger-ui-express');
-jest.mock('openapi-jsdoc', () => () => ({}));
+jest.mock('swagger-jsdoc', () => () => ({}));
 
 describe('Swagger Setup', () => {
   let app: Express;

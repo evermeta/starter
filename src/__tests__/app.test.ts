@@ -6,6 +6,7 @@ import { MetricsService } from '../metrics/metrics.service';
 import { Client } from 'pg';
 import { Logger } from 'winston';
 import { HealthCheck } from '../health/health.check';
+import * as promClient from 'prom-client';
 
 describe('App', () => {
   let app: App;
@@ -15,6 +16,9 @@ describe('App', () => {
   let metricsService: MetricsService;
 
   beforeAll(async () => {
+    // Clear any existing metrics
+    promClient.register.clear();
+
     // Mock process.memoryUsage
     jest.spyOn(process, 'memoryUsage').mockReturnValue({
       heapUsed: 100,
