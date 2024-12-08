@@ -1,4 +1,8 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
+# Run documentation check first (fail fast)
+npm run docs:check || exit 1
+
+# Only run format check if docs passed
 npm run format:check

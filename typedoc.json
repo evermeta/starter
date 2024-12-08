@@ -1,0 +1,10 @@
+{
+  "entryPoints": ["src/"],
+  "out": "docs",
+  "exclude": ["**/*.spec.ts", "**/*.test.ts"],
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeExternals": true,
+  "theme": "default",
+  "name": "Your Project Name"
+} 

@@ -49,9 +49,6 @@ jobs:
       - name: Format Check
         run: npx prettier --check .
 
-      - name: Check Documentation
-        run: npm run docs:check
-
       - name: Run Tests with Coverage
         run: npm run test:coverage
         env:
@@ -77,10 +74,19 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_GITHUB }}
 
-      - name: Generate Documentation
-        run: |
-          npm run docs
-          npm run docs:generate
+      - name: Check documentation
+        run: npm run docs:check
+          
+      - name: Generate documentation
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: npm run docs:generate
+          
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
 
   deploy:
     needs: quality
