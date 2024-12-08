@@ -12,8 +12,8 @@
     "start": "ts-node src/main.ts",
     "docs": "typedoc --out docs src/",
     "docs:watch": "typedoc --options typedoc.config.ts --watch",
-    "docs:generate": "compodoc -p tsconfig.json -s",
-    "docs:serve": "compodoc -p tsconfig.json -s -w",
+    "docs:generate": "typedoc --out docs src/",
+    "docs:serve": "typedoc --out docs src/ --serve",
     "docs:check": "typedoc --out docs src/ --treatWarningsAsErrors",
     "prepare": "husky",
     "lint": "eslint . --ext .ts",
@@ -53,7 +53,6 @@
   "devDependencies": {
     "@commitlint/cli": "^19.6.0",
     "@commitlint/config-conventional": "^19.6.0",
-    "@compodoc/compodoc": "^1.1.26",
     "@opentelemetry/sdk-trace-base": "^1.29.0",
     "@testcontainers/postgresql": "^10.16.0",
     "@types/express": "^5.0.0",
