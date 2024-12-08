@@ -76,11 +76,11 @@ jobs:
 
       - name: Check documentation
         run: npm run docs:check
-          
+
       - name: Generate documentation
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: npm run docs:generate
-          
+
       - name: Deploy to GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: peaceiris/actions-gh-pages@v3
