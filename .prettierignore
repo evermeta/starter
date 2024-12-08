@@ -1,1 +1,11 @@
-documentation/ 
+# Documentation
+docs/
+documentation/
+public/swagger.json
+
+# Build output
+dist/
+coverage/
+
+# Dependencies
+node_modules/ 
