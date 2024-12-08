@@ -49,6 +49,9 @@ jobs:
       - name: Format Check
         run: npx prettier --check .
 
+      - name: Check Documentation
+        run: npm run docs:check
+
       - name: Run Tests with Coverage
         run: npm run test:coverage
         env:

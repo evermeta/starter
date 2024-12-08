@@ -10,11 +10,11 @@
     "test:coverage": "jest --coverage --verbose",
     "test:coverage:watch": "jest --coverage --verbose --watch",
     "start": "ts-node src/main.ts",
-    "docs": "typedoc --options typedoc.config.ts",
+    "docs": "typedoc --out docs src/",
     "docs:watch": "typedoc --options typedoc.config.ts --watch",
     "docs:generate": "compodoc -p tsconfig.json -s",
     "docs:serve": "compodoc -p tsconfig.json -s -w",
-    "prepare": "husky install",
+    "prepare": "husky",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -23,7 +23,8 @@
     "routes": "tsoa routes --configuration tsoa.json",
     "swagger": "tsoa spec --configuration tsoa.json",
     "prebuild": "npm run swagger && npm run routes",
-    "pretest": "npm run routes && npm run swagger"
+    "pretest": "npm run routes && npm run swagger",
+    "docs:check": "typedoc --out docs src/ --treatWarningsAsErrors"
   },
   "keywords": [],
   "author": "",
@@ -82,7 +83,7 @@
   },
   "husky": {
     "hooks": {
-      "pre-commit": "lint-staged && npm run security",
+      "pre-commit": "lint-staged && npm run security && npm run docs:check",
       "pre-push": "npm run format:check"
     }
   },

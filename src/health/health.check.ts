@@ -3,6 +3,10 @@ import { Logger } from 'winston';
 import { Client } from 'pg';
 import { HealthStatus, HealthCheckResult, HealthChecker } from '../types';
 
+/**
+ * Health Check Service
+ * Monitors system health including database connectivity and memory usage
+ */
 @injectable()
 export class HealthCheck {
   private interval?: NodeJS.Timeout;
@@ -10,6 +14,11 @@ export class HealthCheck {
   private lastResult?: HealthCheckResult;
   private readonly CACHE_DURATION = 30000; // 30 seconds
 
+  /**
+   * Creates a new HealthCheck instance
+   * @param logger - Winston logger instance
+   * @param dbClient - PostgreSQL database client
+   */
   constructor(
     @inject('Logger') private readonly logger: Logger,
     @inject('DatabaseClient') private readonly dbClient: Client,
@@ -65,6 +74,10 @@ export class HealthCheck {
     });
   }
 
+  /**
+   * Gets the current health status
+   * @returns Promise containing health check result
+   */
   async getHealth(): Promise<HealthCheckResult> {
     // For tests, respect the mock result if it exists
     if (process.env.NODE_ENV === 'test' && this.lastResult) {
@@ -94,6 +107,9 @@ export class HealthCheck {
     return Date.now() - this.lastResult.timestamp.getTime() < this.CACHE_DURATION;
   }
 
+  /**
+   * Starts the health check service
+   */
   async start(): Promise<void> {
     const interval = process.env.HEALTH_CHECK_INTERVAL
       ? parseInt(process.env.HEALTH_CHECK_INTERVAL)
@@ -111,6 +127,10 @@ export class HealthCheck {
       this.logger.info('Health check complete', { status: health.status });
     }, interval);
   }
+
+  /**
+   * Stops the health check service
+   */
   async stop(): Promise<void> {
     if (this.interval) {
       clearInterval(this.interval);
