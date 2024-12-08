@@ -14,7 +14,7 @@
     "docs:watch": "typedoc --options typedoc.config.ts --watch",
     "docs:generate": "compodoc -p tsconfig.json -s",
     "docs:serve": "compodoc -p tsconfig.json -s -w",
-    "prepare": "husky",
+    "prepare": "husky install",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -79,5 +79,16 @@
   },
   "overrides": {
     "validator": "^13.7.0"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged",
+      "pre-push": "npm run format:check"
+    }
+  },
+  "lint-staged": {
+    "*.{js,ts,tsx,json,css,md}": [
+      "prettier --write"
+    ]
   }
 }
