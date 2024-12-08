@@ -23,7 +23,6 @@ import { HealthCheck } from './health/health.check';
 import { ErrorHandler } from './error/error.handler';
 import { MetricsService } from './metrics/metrics.service';
 import { App } from './app';
-import { setupSwagger } from './config/swagger.config';
 import { ExampleController } from './controllers/example.controller';
 import { setupTracing } from './config/tracing.config';
 
@@ -84,7 +83,12 @@ export class Application {
 
       // Setup Swagger documentation
       if (process.env.NODE_ENV !== 'production') {
-        setupSwagger(this.app.getApp());
+        try {
+          const { setupSwagger } = await import('./config/swagger.config');
+          await setupSwagger(this.app.getApp());
+        } catch (err) {
+          this.logger.warn('Failed to setup Swagger documentation', { error: err });
+        }
       }
 
       this.logger.info('Application started successfully');

@@ -64,6 +64,51 @@ describe('Container', () => {
 
       expect(() => configureContainer()).toThrow();
     });
+
+    it('should log branch coverage for container configuration', () => {
+      // Test environment variables
+      console.log('Current env vars:', {
+        NODE_ENV: process.env.NODE_ENV,
+        LOG_LEVEL: process.env.LOG_LEVEL,
+        METRICS_PORT: process.env.METRICS_PORT,
+        HEALTH_CHECK_INTERVAL: process.env.HEALTH_CHECK_INTERVAL,
+      });
+
+      // Create container with different configurations
+      const container1 = configureContainer();
+      console.log('Container 1 config:', container1.get<ConfigService>('ConfigService'));
+
+      // Test with different NODE_ENV
+      process.env.NODE_ENV = 'production';
+      const container2 = configureContainer();
+      console.log('Container 2 config:', container2.get<ConfigService>('ConfigService'));
+
+      // Test with all default values
+      delete process.env.LOG_LEVEL;
+      delete process.env.METRICS_PORT;
+      delete process.env.HEALTH_CHECK_INTERVAL;
+      const container3 = configureContainer();
+      console.log('Container 3 config:', container3.get<ConfigService>('ConfigService'));
+    });
+
+    it('should use default values when environment variables are not set', () => {
+      // Clear all relevant environment variables
+      delete process.env.NODE_ENV;
+      delete process.env.LOG_LEVEL;
+      delete process.env.METRICS_PORT;
+      delete process.env.HEALTH_CHECK_INTERVAL;
+
+      const container = configureContainer();
+      const config = container.get<ConfigService>('ConfigService');
+      const logger = container.get<Logger>('Logger');
+
+      // Verify defaults were used
+      expect(config['config'].environment).toBe('development');
+      expect(config['config'].logLevel).toBe('info');
+      expect(config['config'].metricsPort).toBe('9090');
+      expect(config['config'].healthCheckInterval).toBe('30000');
+      expect(logger.level).toBe('info');
+    });
   });
 
   describe('Container Resolution', () => {

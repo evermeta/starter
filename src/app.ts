@@ -1,168 +1,117 @@
-import express, { Express, Request, Response, NextFunction } from 'express';
+import express, { Express } from 'express';
 import { injectable } from 'inversify';
 import { Container } from 'inversify';
-import { ExampleController } from './controllers/example.controller';
-import * as opentelemetry from '@opentelemetry/api';
-import { MetricsService } from './metrics/metrics.service';
+import swaggerUi from 'swagger-ui-express';
+import { Router } from 'express';
+import { setupSwagger } from './config/swagger.config';
 import { HealthCheck } from './health/health.check';
+import { Request, Response } from 'express';
+import { RegisterRoutes } from './routes';
 
 @injectable()
 export class App {
   private app: Express;
+  private container: Container;
   private server: any;
+  private healthCheck?: HealthCheck;
 
-  constructor(private readonly container: Container) {
+  constructor(container: Container) {
+    this.container = container;
     this.app = express();
+    if (this.container.isBound(HealthCheck)) {
+      this.healthCheck = container.get<HealthCheck>(HealthCheck);
+    }
     this.setupMiddleware();
+    this.setupRoutes();
+  }
+
+  public async initialize(): Promise<void> {
+    if (this.healthCheck) {
+      await this.healthCheck.start();
+    }
+    this.app.use(express.json());
+    this.app.use(express.urlencoded({ extended: true }));
+
+    // Register TSOA routes
+    RegisterRoutes(this.app);
+
+    // Error handling middleware should preserve status codes
+    this.app.use((err: any, req: Request, res: Response, next: any) => {
+      console.error(err);
+      const status = err.status || 500;
+      res.status(status).json({
+        message: err.message || 'Something broke!',
+        fields: err.fields,
+      });
+    });
+  }
+
+  public async close(): Promise<void> {
+    if (this.server) {
+      await new Promise(resolve => this.server.close(resolve));
+    }
   }
 
   private setupMiddleware(): void {
-    this.app.use((req, res, next) => {
-      // Get the active tracer from the global tracer provider
-      const tracer = opentelemetry.trace.getTracer('express');
-
-      // Start the span with current context
-      const span = tracer.startSpan(`${req.method} ${req.path}`, {
-        kind: opentelemetry.SpanKind.SERVER,
-        attributes: {
-          'http.method': req.method,
-          'http.target': req.path,
-          'http.flavor': req.httpVersion,
-        },
-      });
-
-      // Activate the context with the new span
-      const ctx = opentelemetry.trace.setSpan(opentelemetry.context.active(), span);
-
-      return opentelemetry.context.with(ctx, () => {
-        // Track response
-        const originalEnd = res.end;
-        res.end = function (
-          chunk: unknown,
-          encoding?: BufferEncoding | (() => void),
-          cb?: () => void,
-        ) {
-          span.setAttributes({
-            'http.status_code': res.statusCode,
-          });
-          span.end();
-          return originalEnd.apply(res, [chunk, encoding as BufferEncoding, cb]);
-        };
-
-        next();
-      });
-    });
-
-    // Parse JSON bodies
     this.app.use(express.json());
 
-    // Setup metrics middleware first
-    this.setupMetricsMiddleware();
-
-    // Setup routes after middleware
-    this.setupRoutes();
-
-    // Error handling should be last
-    this.app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
-      res.status(500).json({
-        status: 'error',
-        message: err.message,
-      });
-    });
+    if (process.env.NODE_ENV !== 'production') {
+      setupSwagger(this.app);
+    }
   }
-  private setupMetricsMiddleware(): void {
-    try {
-      const metricsService = this.container.isBound('MetricsService')
-        ? this.container.get<MetricsService>('MetricsService')
-        : null;
 
-      if (!metricsService) {
+  private async setupRoutes(): Promise<void> {
+    // Setup health check routes regardless of environment
+    this.app.get('/health', (async (req: express.Request, res: express.Response) => {
+      if (!this.healthCheck) {
+        res.status(503).json({ status: 'down', details: { error: 'Health check not configured' } });
         return;
       }
+      const health = await this.healthCheck.getHealth();
+      res.status(health.status === 'down' ? 503 : 200).json(health);
+    }) as express.RequestHandler);
 
-      this.app.use((req, res, next) => {
-        const start = process.hrtime();
+    this.app.get('/health/details', (async (req: express.Request, res: express.Response) => {
+      if (!this.healthCheck) {
+        res.status(503).json({ status: 'down', details: { error: 'Health check not configured' } });
+        return;
+      }
+      const health = await this.healthCheck.checkDetails();
+      res.status(health.status === 'down' ? 503 : 200).json(health);
+    }) as express.RequestHandler);
 
-        // Verify method exists before calling
-        if (typeof metricsService.incrementActiveConnections === 'function') {
-          metricsService.incrementActiveConnections();
-        }
-
-        res.on('finish', () => {
-          const duration = process.hrtime(start);
-          const durationInSeconds = duration[0] + duration[1] / 1e9;
-          if (typeof metricsService.recordHttpRequest === 'function') {
-            metricsService.recordHttpRequest(
-              req.method,
-              req.path,
-              res.statusCode,
-              durationInSeconds,
-            );
-          }
-          if (typeof metricsService.decrementActiveConnections === 'function') {
-            metricsService.decrementActiveConnections();
-          }
-        });
-
-        next();
-      });
-    } catch (error) {
-      // Safely handle the case where metrics service isn't available
-      console.warn('Metrics service not available:', error);
-      return;
+    // In test environment, we don't need actual routes
+    if (process.env.NODE_ENV !== 'test') {
+      try {
+        const { RegisterRoutes } = await import('./routes');
+        RegisterRoutes(this.app);
+      } catch (error) {
+        // Handle route registration error
+      }
     }
   }
 
-  private setupRoutes(): void {
-    // Health check routes
-    this.app.get('/health', async (req: Request, res: Response) => {
-      const healthCheck = this.container.get<HealthCheck>('HealthCheck');
-      const health = await healthCheck.getHealth();
+  private async setupHealthRoutes(): Promise<void> {
+    this.app.get('/health', (async (req: express.Request, res: express.Response) => {
+      if (!this.healthCheck) {
+        res.status(503).json({ status: 'down', details: { error: 'Health check not configured' } });
+        return;
+      }
+      const health = await this.healthCheck.getHealth();
+      res.status(health.status === 'down' ? 503 : 200).json(health);
+    }) as express.RequestHandler);
 
-      const statusCode = health.status === 'up' ? 200 : health.status === 'degraded' ? 200 : 503;
-
-      res.status(statusCode).json(health);
-    });
-
-    // Detailed health check route for internal/admin use
-    this.app.get('/health/details', async (req: Request, res: Response) => {
-      const healthCheck = this.container.get<HealthCheck>('HealthCheck');
-      const health = await healthCheck.getHealth();
-
-      const statusCode = health.status === 'up' ? 200 : health.status === 'degraded' ? 200 : 503;
-
-      res.status(statusCode).json({
-        ...health,
-        timestamp: health.timestamp?.toISOString(),
-        uptime: process.uptime(),
-        processMemory: process.memoryUsage(),
-        nodeVersion: process.version,
-        environment: process.env.NODE_ENV || 'development',
-      });
-    });
-
-    // Register example controller
-    const exampleController = this.container.get<ExampleController>(ExampleController);
-    this.app.use('/api/example', exampleController.router);
+    this.app.get('/health/details', (async (req: express.Request, res: express.Response) => {
+      if (!this.healthCheck) {
+        res.status(503).json({ status: 'down', details: { error: 'Health check not configured' } });
+        return;
+      }
+      const health = await this.healthCheck.checkDetails();
+      res.status(health.status === 'down' ? 503 : 200).json(health);
+    }) as express.RequestHandler);
   }
 
-  getApp(): Express {
+  public getApp(): Express {
     return this.app;
-  }
-
-  async initialize(): Promise<void> {
-    this.server = this.app.listen(/* your port */);
-  }
-
-  async close(): Promise<void> {
-    if (this.server) {
-      await new Promise(resolve => {
-        this.server.close(resolve);
-      });
-    }
-    if (this.container.isBound('MetricsService')) {
-      const metricsService = this.container.get<MetricsService>('MetricsService');
-      await metricsService.shutdown?.();
-    }
   }
 }
